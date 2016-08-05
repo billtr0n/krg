@@ -134,6 +134,13 @@ int main (int argc, char*argv[]) {
             read_fault_params(p.rake_file, off, csize, rake_buf);
             read_fault_params(p.coord_file, off, csize, coords_buf);
 
+            if (rank == master) {
+                for (k=0; k<csize; k++) {
+                    fprintf(stderr, "%f\n", moment_buf[csize]);
+                }
+
+            }
+
             /* looping over each subfault */
             for (k=0; k<csize; k++) {
                 calculate_moment_rate(time_buf, p.nt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
