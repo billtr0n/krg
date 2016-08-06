@@ -38,7 +38,7 @@ int main (int argc, char*argv[]) {
     float *strike_buf, *dip_buf, *rake_buf;
     float *coords_buf;
     float *moment_buf;
-    int debug = 1;
+    int debug = 0;
     int master = 0;
     float **xx_buf, **yy_buf, **zz_buf, **xz_buf, **yz_buf, **xy_buf;
     int *xil_buf, *yil_buf, *zil_buf;
@@ -98,21 +98,21 @@ int main (int argc, char*argv[]) {
 
 
     /* 2D arrays for time-series */
-    xx_buf = (float**)calloc(csize, sizeof(float*));
-    yy_buf = (float**)calloc(csize, sizeof(float*));
-    zz_buf = (float**)calloc(csize, sizeof(float*));
-    xz_buf = (float**)calloc(csize, sizeof(float*));
-    yz_buf = (float**)calloc(csize, sizeof(float*));
-    xy_buf = (float**)calloc(csize, sizeof(float*));
-    
-    for (l=0; l<csize; l++) {
-        xx_buf[l] = (float*)calloc(p.nt, sizeof(float));
-        yy_buf[l] = (float*)calloc(p.nt, sizeof(float));
-        zz_buf[l] = (float*)calloc(p.nt, sizeof(float));
-        xz_buf[l] = (float*)calloc(p.nt, sizeof(float));
-        yz_buf[l] = (float*)calloc(p.nt, sizeof(float));
-        xy_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    }
+    //xx_buf = (float**)calloc(csize, sizeof(float*));
+    //yy_buf = (float**)calloc(csize, sizeof(float*));
+    //zz_buf = (float**)calloc(csize, sizeof(float*));
+    //xz_buf = (float**)calloc(csize, sizeof(float*));
+    //yz_buf = (float**)calloc(csize, sizeof(float*));
+    //xy_buf = (float**)calloc(csize, sizeof(float*));
+    //
+    //for (l=0; l<csize; l++) {
+    //    xx_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    //    yy_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    //    zz_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    //    xz_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    //    yz_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    //    xy_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    //}
 
         /* loop over subfault block */
         MPI_Barrier(MPI_COMM_WORLD);
@@ -124,6 +124,11 @@ int main (int argc, char*argv[]) {
             off = (MPI_Offset) s0 * sizeof(float);
             yi = s0 / p.nx;
             xi = s0 % p.nx;   
+            if (debug == 0) {
+                fprintf(stderr, "s0: %d\n", s0);
+                fprintf(stderr, "csize: %d\n", csize);
+                fprintf(stderr, "off: %lli\n", off);
+            }
 
             // read files
             read_fault_params(p.moment_file, off, csize, moment_buf);
@@ -134,38 +139,38 @@ int main (int argc, char*argv[]) {
             read_fault_params(p.rake_file, off, csize, rake_buf);
             read_fault_params(p.coord_file, off, csize, coords_buf);
 
-            if (rank == master) {
+            if (rank == 0) {
                 for (k=0; k<csize; k++) {
-                    fprintf(stderr, "%f\n", moment_buf[csize]);
+                    fprintf(stdout, "%f\n", moment_buf[k]);
                 }
 
             }
 
             /* looping over each subfault */
-            for (k=0; k<csize; k++) {
-                calculate_moment_rate(time_buf, p.nt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
-                                        moment_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k]);
+           // for (k=0; k<csize; k++) {
+           //     calculate_moment_rate(time_buf, p.nt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
+           //                             moment_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k]);
 
-                /* determine subfault location assuming fault is striking along x component */
-                xil_buf[k] = p.x_start + (s0+k) % p.nx; 
-                yil_buf[k] = p.y_start + rint((coords_buf[k] - p.mean_faultn_coord) / p.dx);
-                zil_buf[k] = p.z_start + (s0+k) / p.nx;  
+           //     /* determine subfault location assuming fault is striking along x component */
+           //     xil_buf[k] = p.x_start + (s0+k) % p.nx; 
+           //     yil_buf[k] = p.y_start + rint((coords_buf[k] - p.mean_faultn_coord) / p.dx);
+           //     zil_buf[k] = p.z_start + (s0+k) / p.nx;  
 
-                moment += calculate_moment(p.nt, p.dt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k]);
-            }
-            
-            if (rank==master) fprintf(stderr, "writing momentrate file.");
-            write_momrate(p.momentrate_file, p.nt, p.nchunks, rank, csize, l, xil_buf, yil_buf, zil_buf, xx_buf, yy_buf, zz_buf, xz_buf, yz_buf, xy_buf);
+           //     moment += calculate_moment(p.nt, p.dt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k]);
+           // }
+           // 
+           // if (rank==master) fprintf(stderr, "writing momentrate file.");
+//         // write_momrate(p.momentrate_file, p.nt, p.nchunks, rank, csize, l, xil_buf, yil_buf, zil_buf, xx_buf, yy_buf, zz_buf, xz_buf, yz_buf, xy_buf);
         
     } /* end main loop */
 
     /* compute moment from all processes */
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Reduce(&moment, &global_moment, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD); 
-    if (rank == master) {
-        fprintf(stderr, "total moment: %e\n", global_moment);
-        fprintf(stderr, "mw: %e\n", (2.0/3.0)*(log10(global_moment)-9.1));
-    }
+    //MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Reduce(&moment, &global_moment, 1, MPI_FLOAT, MPI_SUM, 0, MPI_COMM_WORLD); 
+    //if (rank == master) {
+    //    fprintf(stderr, "total moment: %e\n", global_moment);
+    //    fprintf(stderr, "mw: %e\n", (2.0/3.0)*(log10(global_moment)-9.1));
+    //}
     /* free buffers */
     
     /* finalize mpi */
