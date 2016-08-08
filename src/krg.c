@@ -21,8 +21,8 @@
 float calculate_moment(int nst, float dt, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy);
 
 /* calculate moment rate tensor given subfault parameters */
-void calculate_moment_rate(float *time, int nt, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
-                                    float moment, float strike, float dip, float rake, float psv, float trup);
+void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
+                                    float slip, float strike, float dip, float rake, float psv, float trup, int rank, float vs, float rho);
 
 int main (int argc, char*argv[]) {
     /* modify these parameters */
@@ -32,15 +32,16 @@ int main (int argc, char*argv[]) {
     MPI_Offset off;
     int xi, yi;
     int rank, nprocs, csize;
-    int k,l;
+    int i,k,l;
     float moment, global_moment;
     float *psv_buf, *trup_buf;
     float *strike_buf, *dip_buf, *rake_buf;
     float *coords_buf;
-    float *moment_buf;
+    float *slip_buf;
     int debug = 0;
     int master = 0;
     float **xx_buf, **yy_buf, **zz_buf, **xz_buf, **yz_buf, **xy_buf;
+    float *vs_buf, *rho_buf;
     int *xil_buf, *yil_buf, *zil_buf;
     float *time_buf;
 
@@ -65,7 +66,7 @@ int main (int argc, char*argv[]) {
         fprintf(stderr, "strike file: %s\n", p.strike_file);
         fprintf(stderr, "dip file: %s\n", p.dip_file);
         fprintf(stderr, "rake file: %s\n", p.rake_file);
-        fprintf(stderr, "moment file: %s\n", p.moment_file);
+        fprintf(stderr, "slip file: %s\n", p.slip_file);
         fprintf(stderr, "momentrate file: %s\n\n", p.momentrate_file);
     }
 
@@ -81,43 +82,41 @@ int main (int argc, char*argv[]) {
     csize = p.nx*p.nz / nprocs / p.nchunks;
     
     time_buf = arange(0.0, p.rt, p.dt, &(p.nt));
-        /* allocate arrays */
     psv_buf = (float*)calloc(csize, sizeof(float));
+    vs_buf = (float*)calloc(csize, sizeof(float));
+    rho_buf = (float*)calloc(csize, sizeof(float));
     trup_buf = (float*)calloc(csize, sizeof(float));
     strike_buf = (float*)calloc(csize, sizeof(float));
     dip_buf = (float*)calloc(csize, sizeof(float));
     rake_buf = (float*)calloc(csize, sizeof(float));
     coords_buf = (float*)calloc(csize, sizeof(float));
-    moment_buf = (float*)calloc(csize, sizeof(float));
-
-    time_buf = (float*)calloc(p.nt, sizeof(float));
+    slip_buf = (float*)calloc(csize, sizeof(float));
 
     xil_buf = (int*)calloc(csize, sizeof(int));
     yil_buf = (int*)calloc(csize, sizeof(int));
     zil_buf = (int*)calloc(csize, sizeof(int));
 
-
     /* 2D arrays for time-series */
-    //xx_buf = (float**)calloc(csize, sizeof(float*));
-    //yy_buf = (float**)calloc(csize, sizeof(float*));
-    //zz_buf = (float**)calloc(csize, sizeof(float*));
-    //xz_buf = (float**)calloc(csize, sizeof(float*));
-    //yz_buf = (float**)calloc(csize, sizeof(float*));
-    //xy_buf = (float**)calloc(csize, sizeof(float*));
-    //
-    //for (l=0; l<csize; l++) {
-    //    xx_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    //    yy_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    //    zz_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    //    xz_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    //    yz_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    //    xy_buf[l] = (float*)calloc(p.nt, sizeof(float));
-    //}
+    xx_buf = (float**)calloc(csize, sizeof(float*));
+    yy_buf = (float**)calloc(csize, sizeof(float*));
+    zz_buf = (float**)calloc(csize, sizeof(float*));
+    xz_buf = (float**)calloc(csize, sizeof(float*));
+    yz_buf = (float**)calloc(csize, sizeof(float*));
+    xy_buf = (float**)calloc(csize, sizeof(float*));
+    
+    for (l=0; l<csize; l++) {
+       xx_buf[l] = (float*)calloc(p.nt, sizeof(float));
+        yy_buf[l] = (float*)calloc(p.nt, sizeof(float));
+        zz_buf[l] = (float*)calloc(p.nt, sizeof(float));
+        xz_buf[l] = (float*)calloc(p.nt, sizeof(float));
+        yz_buf[l] = (float*)calloc(p.nt, sizeof(float));
+        xy_buf[l] = (float*)calloc(p.nt, sizeof(float));
+    }
 
-        /* loop over subfault block */
+        /* loop over subfault block nchunks */
         MPI_Barrier(MPI_COMM_WORLD);
         moment = 0;
-        for (l = 0; l < p.nchunks; l++) {
+        for (l = 0; l < 1; l++) {
             
             // calculate offsets
             s0 = rank*p.nchunks*csize + l*csize;
@@ -131,34 +130,35 @@ int main (int argc, char*argv[]) {
             }
 
             // read files
-            read_fault_params(p.moment_file, off, csize, moment_buf);
+            read_fault_params(p.slip_file, off, csize, slip_buf);
             read_fault_params(p.psv_file, off, csize, psv_buf);
             read_fault_params(p.trup_file, off, csize, trup_buf);
             read_fault_params(p.strike_file, off, csize, strike_buf);
             read_fault_params(p.dip_file, off, csize, dip_buf);
             read_fault_params(p.rake_file, off, csize, rake_buf);
             read_fault_params(p.coord_file, off, csize, coords_buf);
+            read_fault_params(p.vs_file, off, csize, vs_buf);
+            read_fault_params(p.rho_file, off, csize, rho_buf);
 
-            if (rank == 0) {
-                for (k=0; k<csize; k++) {
-                    fprintf(stdout, "%f\n", moment_buf[k]);
+            if ( rank == master ) {
+                for (i=0; i<10; i++) {
+                    fprintf(stderr, "%f %f %f %f %f %f %f %f %f %f\n", slip_buf[i], psv_buf[i], trup_buf[i], strike_buf[i], dip_buf[i], rake_buf[i], coords_buf[i], vs_buf[i], rho_buf[i], time_buf[i]);
                 }
-
             }
 
             /* looping over each subfault */
-           // for (k=0; k<csize; k++) {
-           //     calculate_moment_rate(time_buf, p.nt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
-           //                             moment_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k]);
+            for (k=100; k<101; k++) {
+                calculate_moment_rate(time_buf, p.nt, p.dx, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
+                                        slip_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k], rank, vs_buf[k], rho_buf[k]);
 
-           //     /* determine subfault location assuming fault is striking along x component */
-           //     xil_buf[k] = p.x_start + (s0+k) % p.nx; 
-           //     yil_buf[k] = p.y_start + rint((coords_buf[k] - p.mean_faultn_coord) / p.dx);
-           //     zil_buf[k] = p.z_start + (s0+k) / p.nx;  
+                /* determine subfault location assuming fault is striking along x component */
+                xil_buf[k] = p.x_start + (s0+k) % p.nx; 
+                yil_buf[k] = p.y_start + rint((coords_buf[k] - p.mean_faultn_coord) / p.dx);
+                zil_buf[k] = p.z_start + (s0+k) / p.nx;  
 
-           //     moment += calculate_moment(p.nt, p.dt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k]);
-           // }
-           // 
+                moment += calculate_moment(p.nt, p.dt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k]);
+            }
+            
            // if (rank==master) fprintf(stderr, "writing momentrate file.");
 //         // write_momrate(p.momentrate_file, p.nt, p.nchunks, rank, csize, l, xil_buf, yil_buf, zil_buf, xx_buf, yy_buf, zz_buf, xz_buf, yz_buf, xy_buf);
         
@@ -179,19 +179,26 @@ int main (int argc, char*argv[]) {
     return 0;
 }
 
-void calculate_moment_rate(float *time, int nt, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
-                                    float moment, float strike, float dip, float rake, float psv, float trup) {
+void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
+                                    float slip, float strike, float dip, float rake, float psv, float trup, int rank, 
+                                    float vs, float rho) {
 
-    float momentrate;
+    float sliprate, momentrate;
     float tpeak;
     int i;
 
-    tpeak = moment / exp(psv);
+    tpeak = slip / exp(psv);
+    fprintf(stderr, "%f %f %f %i\n", psv, slip, exp(psv), nt);
     for (i=0; i<nt; i++) {
         if (time[i] > trup) {
-            momentrate = moment / tpeak * (time[i] - trup) / tpeak * exp(-((time[i] - trup) / tpeak));
+            sliprate = slip / tpeak * (time[i] - trup) / tpeak * exp(-((time[i] - trup) / tpeak));
         } else {
-            momentrate = 0.0;
+            sliprate = 0.0;
+        }
+        // muAD = moment
+        momentrate = sliprate * vs*vs*rho * dx*dx;
+        if (rank == 1) {
+            fprintf(stdout, "%f\n", sliprate);
         }
         // convert to magnitude from strike dip and rake
         xx[i] = momentrate * (sin(dip)*cos(rake)*sin(2*strike) - sin(2*dip)*sin(rake)*cos(strike)*cos(strike));

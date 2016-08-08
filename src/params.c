@@ -34,11 +34,13 @@ void read_settings(param *P, char *paramsfile) {
      if (strcmp(param, "mean_faultn_coord")==0) sscanf(value, "%f", &P->mean_faultn_coord);
      if (strcmp(param, "nt")==0) sscanf(value, "%d", &P->nt);
      if (strcmp(param, "psv_file")==0)  strcpy(P->psv_file, value);
+     if (strcmp(param, "vs_file")==0)  strcpy(P->vs_file, value);
+     if (strcmp(param, "rho_file")==0)  strcpy(P->rho_file, value);
      if (strcmp(param, "trup_file")==0)  strcpy(P->trup_file, value);
      if (strcmp(param, "strike_file")==0) strcpy(P->strike_file, value);
      if (strcmp(param, "dip_file")==0) strcpy(P->dip_file, value);
      if (strcmp(param, "rake_file")==0) strcpy(P->rake_file, value);
-     if (strcmp(param, "moment_file")==0) strcpy(P->moment_file, value);
+     if (strcmp(param, "slip_file")==0) strcpy(P->slip_file, value);
      if (strcmp(param, "momentrate_file")==0) strcpy(P->momentrate_file, value);
      if (strcmp(param, "coord_file")==0) strcpy(P->coord_file, value);
      if (strcmp(param, "iord")==0) sscanf(value, "%d", &P->iord);
