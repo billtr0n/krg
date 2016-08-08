@@ -1,6 +1,6 @@
 DBG = -Wall
-FC = ftn 
-CC = cc 
+FC = ftn
+CC = cc
 FLAGS = -O3
 LIBS = -lm -lgfortran
 SRCDIR = src
