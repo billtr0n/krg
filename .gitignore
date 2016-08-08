@@ -1,5 +1,6 @@
 # Misc Files
 krg.sublime-workspace
+*.log
 
 # Object files
 *.o
