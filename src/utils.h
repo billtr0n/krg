@@ -8,3 +8,6 @@ float* arange(float start, float end, float dx, int *n);
 
 /* computes sum of 1d array */
 float sum(float *buf, int n);
+
+/* returns value of hann window with length, n, at step i */
+float hann(int i, int n);

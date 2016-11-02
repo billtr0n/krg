@@ -40,6 +40,11 @@ float sum(float *buf, int n) {
     return total;
 }
 
+float hann(int i, int n) 
+{
+    return 0.5 - 0.5 * cos(2*M_PI*i / (n-1));
+}
+
 /*
 int main() {
     float *buf;

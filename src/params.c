@@ -18,20 +18,20 @@ void read_settings(param *P, char *paramsfile) {
    char newline[200];
  
    stat2=(char*) calloc(2, sizeof(char));
-   while (stat2 != NULL){
+   while (stat2 != NULL) {
      stat2=fgets(newline, 200, fid);
      sscanf(newline, "%s %s", param, value);
      if (strcmp(param, "nchunks")==0) sscanf(value, "%d", &P->nchunks);
      if (strcmp(param, "nx")==0) sscanf(value, "%d", &P->nx);
      if (strcmp(param, "nz")==0) sscanf(value, "%d", &P->nz);
-     if (strcmp(param, "dx")==0) sscanf(value, "%f", &P->dx);
+     if (strcmp(param, "sim_dx")==0) sscanf(value, "%f", &P->sim_dx);
+     if (strcmp(param, "source_dx")==0) sscanf(value, "%f", &P->source_dx);
      if (strcmp(param, "dt")==0) sscanf(value, "%f", &P->dt);
      if (strcmp(param, "rt")==0) sscanf(value, "%f", &P->rt);
-     if (strcmp(param, "nt")==0) sscanf(value, "%d", &P->nt);
      if (strcmp(param, "x_start")==0) sscanf(value, "%d", &P->x_start);
      if (strcmp(param, "y_start")==0) sscanf(value, "%d", &P->y_start);
      if (strcmp(param, "z_start")==0) sscanf(value, "%d", &P->z_start);
-     if (strcmp(param, "mean_faultn_coord")==0) sscanf(value, "%f", &P->mean_faultn_coord);
+     if (strcmp(param, "faultn_coord")==0) sscanf(value, "%f", &P->faultn_coord);
      if (strcmp(param, "nt")==0) sscanf(value, "%d", &P->nt);
      if (strcmp(param, "psv_file")==0)  strcpy(P->psv_file, value);
      if (strcmp(param, "vs_file")==0)  strcpy(P->vs_file, value);
