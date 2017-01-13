@@ -1,11 +1,14 @@
 /* This program creates a kinematic source from results of an AWP dynamic rupture
-   simulation, both for a vertical non-planar fault.
+   simulation, both for a vertical non-planar fault.  This code was largely based on
+   code provided by Daneil Roten <droten at sdsu dot mail dot com>. 
 
     William Savran, wsavran@ucsd.edu
 
    MPI-IO is used both for reading the source time function and writing
    the moment rate file.
 */
+
+
 
 #include <stdio.h>
 #include <mpi.h>
