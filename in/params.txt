@@ -8,6 +8,7 @@ rt 25.0
 x_start 1600
 y_start 1600
 z_start 1
+proj 2
 faultn_coord 20000.0
 
 

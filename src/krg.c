@@ -114,6 +114,7 @@ int main (int argc, char*argv[]) {
         fprintf(stderr, "source_dx: %f\n", p.source_dx);
         fprintf(stderr, "rt: %f\n", p.rt);
         fprintf(stderr, "nt: %i\n", nt);
+        fprintf(stderr, "proj: %i\n", p.proj);
         fprintf(stderr, "psv file: %s\n", p.psv_file);
         fprintf(stderr, "trup file: %s\n", p.trup_file);
         fprintf(stderr, "strike file: %s\n", p.strike_file);
@@ -150,11 +151,12 @@ int main (int argc, char*argv[]) {
         read_fault_params(p.strike_file, off, csize, strike_buf);
         read_fault_params(p.dip_file, off, csize, dip_buf);
         read_fault_params(p.rake_file, off, csize, rake_buf);
-        read_fault_params(p.coord_file, off, csize, coords_buf);
+        if (p.proj == 3) read_fault_params(p.coord_file, off, csize, coords_buf);
         read_fault_params(p.vs_file, off, csize, vs_buf);
         read_fault_params(p.rho_file, off, csize, rho_buf);
 
         /* looping over each subfault */
+        // look for bug in here.
         for (k=0; k<csize; k++) {
             calculate_moment_rate(time_buf, nt, p.source_dx, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
                                     slip_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k], rank, vs_buf[k], rho_buf[k]);
@@ -171,7 +173,12 @@ int main (int argc, char*argv[]) {
 
             /* determine subfault location assuming fault is striking along x component */
             xil_buf[k] = p.x_start + ((s0 + k) % p.nx * source_sim_dx_rat); 
-            yil_buf[k] = p.y_start + rint((coords_buf[k] - p.faultn_coord) / p.sim_dx);
+            if (p.proj == 3) {
+                yil_buf[k] = p.y_start + rint((coords_buf[k] - p.faultn_coord) / p.sim_dx);
+            }
+            else {
+                yil_buf[k] = p.y_start;
+            }
             zil_buf[k] = p.z_start + ((s0 + k) / p.nx * source_sim_dx_rat);  
 
             /* compute local moment */
@@ -218,11 +225,14 @@ void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, 
 
     for (i=0; i<nt; i++) {
         // calculate slip-rates
-        if (time[i] > trup) {
+        if (time[i] > trup ) {
             sliprate = slip / tpeak * (time[i] - trup) / tpeak * exp(-((time[i] - trup) / tpeak));
-        } else {
+        } 
+        else if (slip < 0.001) {
             sliprate = 0.0;
         }
+        else {
+            sliprate = 0.0;
         // muAD = moment
         momentrate = sliprate * vs*vs*rho * dx*dx;
         

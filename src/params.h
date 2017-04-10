@@ -3,6 +3,7 @@ typedef struct {
    float dt, source_dx, rt;
    float sim_dx;
    int x_start, y_start, z_start;
+   int proj;
    float faultn_coord;
    char psv_file[256], trup_file[256];
    char strike_file[256], dip_file[256], rake_file[256];

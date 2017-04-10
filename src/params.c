@@ -28,6 +28,7 @@ void read_settings(param *P, char *paramsfile) {
      if (strcmp(param, "source_dx")==0) sscanf(value, "%f", &P->source_dx);
      if (strcmp(param, "dt")==0) sscanf(value, "%f", &P->dt);
      if (strcmp(param, "rt")==0) sscanf(value, "%f", &P->rt);
+     if (strcmp(param, "proj")==0) sscanf(value, "%i", &P->proj);
      if (strcmp(param, "x_start")==0) sscanf(value, "%d", &P->x_start);
      if (strcmp(param, "y_start")==0) sscanf(value, "%d", &P->y_start);
      if (strcmp(param, "z_start")==0) sscanf(value, "%d", &P->z_start);
