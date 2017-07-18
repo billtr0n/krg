@@ -34,7 +34,7 @@ int main (int argc, char*argv[]) {
     MPI_Offset off;
     int xi, yi;
     int rank, nprocs, csize;
-    int k,l,z;
+    int k,l;
     float moment, global_moment;
     float *psv_buf, *trup_buf;
     float *strike_buf, *dip_buf, *rake_buf;
@@ -123,6 +123,14 @@ int main (int argc, char*argv[]) {
         fprintf(stderr, "slip file: %s\n", p.slip_file);
         fprintf(stderr, "mean fault coord: %f\n", p.faultn_coord);
         fprintf(stderr, "momentrate file: %s\n\n", p.momentrate_file);
+        fprintf(stderr, "iord: %d\n", p.iord);
+        fprintf(stderr, "npas: %d\n", p.iord);
+        fprintf(stderr, "trbndw: %d\n", p.iord);
+        fprintf(stderr, "a: %d\n", p.iord);
+        fprintf(stderr, "aproto: %d\n", p.iord);
+        fprintf(stderr, "ftype: %d\n", p.iord);
+        fprintf(stderr, "hp: %d\n", p.iord);
+        fprintf(stderr, "lp: %d\n", p.iord);
     }
     
     /* loop over subfault block nchunks */
@@ -156,32 +164,34 @@ int main (int argc, char*argv[]) {
         read_fault_params(p.rho_file, off, csize, rho_buf);
 
         /* looping over each subfault */
-        // look for bug in here.
         for (k=0; k<csize; k++) {
             calculate_moment_rate(time_buf, nt, p.source_dx, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
                                     slip_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k], rank, vs_buf[k], rho_buf[k]);
             
-            // point: iz=101, ix=201, if nproc = ny
-            if (rank==100) {
-                if (k==200) {
-                    fprintf(stderr, "%f %f %f\n", strike_buf[k], dip_buf[k], rake_buf[k]);
-                    for(z=0; z<nt; z++) {
-                        fprintf(stderr, "%f %f %f %f %f %f\n", xx_buf[k][z], yy_buf[k][z], zz_buf[k][z], xz_buf[k][z], yz_buf[k][z], xy_buf[k][z]);
-                    }
-                }
+            /* filter if desired */
+            if (p.filter) {
+                xapiir_(xx_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
+                xapiir_(yy_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
+                xapiir_(zz_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
+                xapiir_(xz_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
+                xapiir_(yz_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
+                xapiir_(xy_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
             }
 
             /* determine subfault location assuming fault is striking along x component */
             xil_buf[k] = p.x_start + ((s0 + k) % p.nx * source_sim_dx_rat); 
+
+            // rough
             if (p.proj == 3) {
                 yil_buf[k] = p.y_start + rint((coords_buf[k] - p.faultn_coord) / p.sim_dx);
             }
+            // planar
             else {
                 yil_buf[k] = p.y_start;
             }
             zil_buf[k] = p.z_start + ((s0 + k) / p.nx * source_sim_dx_rat);  
 
-            /* compute local moment */
+            /* compute local moment filtered source */
             moment += calculate_moment(nt, p.dt, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k]);
             
         } // end loop subfault
@@ -201,7 +211,35 @@ int main (int argc, char*argv[]) {
     }
 
     /* free buffers */
-    // ahhhhhhhh!
+    for (l=0; l<csize; l++) {
+        free(xx_buf[l]);
+        free(yy_buf[l]);
+        free(zz_buf[l]);
+        free(xz_buf[l]);
+        free(yz_buf[l]);
+        free(xy_buf[l]);
+    }
+    free(xx_buf);
+    free(yy_buf);
+    free(zz_buf);
+    free(xz_buf);
+    free(yz_buf);
+    free(xy_buf);
+    
+    // 1d buffers
+    free(psv_buf);
+    free(trup_buf);
+    free(strike_buf);
+    free(dip_buf);
+    free(rake_buf);
+    free(coords_buf);
+    free(slip_buf);
+    free(vs_buf);
+    free(rho_buf);
+    free(xil_buf);
+    free(yil_buf);
+    free(zil_buf);
+    free(time_buf);
     
     /* finalize mpi */
     MPI_Barrier(MPI_COMM_WORLD);
@@ -228,11 +266,13 @@ void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, 
         if (time[i] > trup ) {
             sliprate = slip / tpeak * (time[i] - trup) / tpeak * exp(-((time[i] - trup) / tpeak));
         } 
-        else if (slip < 0.001) {
+        // prevent singularity when slip = 0; tpeak=0, and sliprate = inf
+        else if (slip < 0.0001) {
             sliprate = 0.0;
         }
         else {
             sliprate = 0.0;
+        }
         // muAD = moment
         momentrate = sliprate * vs*vs*rho * dx*dx;
         

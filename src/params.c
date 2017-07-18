@@ -44,6 +44,7 @@ void read_settings(param *P, char *paramsfile) {
      if (strcmp(param, "slip_file")==0) strcpy(P->slip_file, value);
      if (strcmp(param, "momentrate_file")==0) strcpy(P->momentrate_file, value);
      if (strcmp(param, "coord_file")==0) strcpy(P->coord_file, value);
+     if (strcmp(param, "filter")==0) sscanf(value, "%d", &P->filter);
      if (strcmp(param, "iord")==0) sscanf(value, "%d", &P->iord);
      if (strcmp(param, "npas")==0) sscanf(value, "%d", &P->npas);
      if (strcmp(param, "trbndw")==0) sscanf(value, "%f", &P->trbndw);

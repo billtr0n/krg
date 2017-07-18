@@ -11,7 +11,6 @@ z_start 1
 proj 2
 faultn_coord 20000.0
 
-
 ## Filenames (temporary solution)
 psv_file in/sim1_psv.bin
 vs_file in/sim1_vs.bin
@@ -25,11 +24,12 @@ momentrate_file in/momrate_awp_input.bin
 coord_file in/fault_coords.bin
 
 ## Filtering parameters
-iord 4
-npas 2
+filter 1
+iord 6
+npas 1
 trbndw 0.
 a 0.
 aproto BU
 ftype LP
 hp 0.0
-lp 10.0
+lp 12.5
