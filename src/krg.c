@@ -19,13 +19,15 @@
 #include "xapiir.h"
 #include "spline.h"
 #include "params.h"
+#include "stf.h"
 
 /* computed scalar moment given moment rate tensor */
 float calculate_moment(int nst, float dt, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy);
 
 /* calculate moment rate tensor given subfault parameters */
 void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
-                                    float slip, float strike, float dip, float rake, float psv, float trup, int rank, float vs, float rho);
+                                    float slip, float psv, float trup, float strike, float dip, float rake, 
+                                    float vs, float rho, int rank);
 
 int main (int argc, char*argv[]) {
     /* modify these parameters */
@@ -166,7 +168,8 @@ int main (int argc, char*argv[]) {
         /* looping over each subfault */
         for (k=0; k<csize; k++) {
             calculate_moment_rate(time_buf, nt, p.source_dx, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
-                                    slip_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], psv_buf[k], trup_buf[k], rank, vs_buf[k], rho_buf[k]);
+                                    slip_buf[k], psv_buf[k], trup_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], vs_buf[k], rho_buf[k], rank);
+
             
             /* filter if desired */
             if (p.filter) {
@@ -249,17 +252,43 @@ int main (int argc, char*argv[]) {
 
 /* FUNCTIONS */
 void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
-                                    float slip, float strike, float dip, float rake, float psv, float trup, int rank, 
-                                    float vs, float rho) {
-
-    float sliprate, momentrate;
-    float tpeak;
+                                    float slip, float psv, float trup, float strike, float dip, float rake, 
+                                    float vs, float rho, int rank) {
+    float *sliprate; 
+    float momentrate;
+    float ts, tr;
+    float dt;
     int i;
     float srad, drad, rrad;
+    // float ratio = 0.04235592747; // hard-coded assuming fs_max = 15.0 Hz
+    float dc = 0.11;
+    dt = time[1] - time[0];
 
-    tpeak = slip / (exp(1)*psv);
+    // cap ts for low peak slip value based on analysis from dynamic sims
+    ts = 0.75 * dc / psv;
+    if (ts > 0.5) {
+        ts = 0.5;
+    }
+
+    // compute rise time
+    tr = powf(slip, 2) / powf(psv, 2) / ts;
+        
+    // prevent bad values that are undefined for the tinti function
+    if (tr <= ts) {
+        // arbitrary increment
+        tr = ts + 50*dt;
+    } 
+    else if (tr >= 16.0) {
+        tr = 16.0; // temporary value calculated as vrup=2410 m/s fault width = 40km
+    }
     
-    //fprintf(stderr, "psv: %f slip: %f trup: %f strike: %f dip: %f rake: %f tpeak: %f nt: %i\n", psv, slip, trup, strike, dip, rake, tpeak, nt);
+    // output debugging information
+    fprintf(stderr, "(%d) psv: %f slip: %f trup: %f strike: %f dip: %f rake: %f ts: %f tr: %f nt: %i\n", rank, psv, slip, trup, strike, dip, rake, ts, tr, nt);
+
+    sliprate = zeros_f(nt);
+
+    /* DEPRECATED : Exponential Source-time function 
+    tpeak = slip / (exp(1)*psv);
 
     for (i=0; i<nt; i++) {
         // calculate slip-rates
@@ -274,9 +303,18 @@ void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, 
             sliprate = 0.0;
         }
         // muAD = moment
-        momentrate = sliprate * vs*vs*rho * dx*dx;
+    */
         
-        // convert to magnitude from strike dip and rake based on aki and richards using awp-odc sign conventions.
+    // compute slip-rate function
+    if (trup <=16) {
+        sliprate = tinti(time, nt, tr, ts, trup, slip);
+    }
+
+    for (i=0; i<nt; i++) {
+        // convert to moment-rate using Mo = uAD
+        momentrate = sliprate[i] * vs*vs*rho * dx*dx;
+
+        // convert to moment-rate tensor from strike dip and rake based on aki and richards using awp-odc sign conventions.
         srad = strike * M_PI / 180.0;
         drad = dip * M_PI / 180.0;
         rrad = rake * M_PI / 180.0;
@@ -287,6 +325,8 @@ void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, 
         yz[i] = (momentrate * (cos(drad)*cos(rrad)*cos(srad)+cos(2*drad)*sin(rrad)*sin(srad)));
         xy[i] = (momentrate * (sin(drad)*cos(rrad)*cos(2*srad) + 0.5*sin(2*drad)*sin(rrad)*sin(2*srad)));
     }
+    // release memory
+    free(sliprate);
 }
      
 float calculate_moment(int nst, float dt, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy) {

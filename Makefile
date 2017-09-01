@@ -13,6 +13,7 @@ all:
 	make xapiir
 	make utils
 	make params
+	make stf
 	make krg 
 
 mpio:
@@ -30,6 +31,9 @@ utils:
 params:
 	$(CC) -c $(DBG) $(FLAGS) $(SRCDIR)/params.c -o $(OBJDIR)/$@.o
     
+stf:
+	$(CC) -c $(DBG) $(FLAGS) $(SRCDIR)/stf.c -o $(OBJDIR)/$@.o
+	
 krg:
 	$(CC) $(DBG) $(FLAGS) -o $(BINDIR)/krg $(SRCDIR)/krg.c $(OBJDIR)/*.o $(LIBS)
 
