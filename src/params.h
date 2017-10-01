@@ -2,6 +2,8 @@ typedef struct {
    int nchunks, nx, nz, nt;
    float dt, source_dx, rt;
    float sim_dx;
+   float dc, truptot, median_ts;
+   float tp_psv_coef;
    int x_start, y_start, z_start;
    int filter;
    int proj;

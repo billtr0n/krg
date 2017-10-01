@@ -53,6 +53,11 @@ void read_settings(param *P, char *paramsfile) {
      if (strcmp(param, "ftype")==0) strcpy(P->ftype, value);
      if (strcmp(param, "hp")==0) sscanf(value, "%f", &P->hp);
      if (strcmp(param, "lp")==0) sscanf(value, "%f", &P->lp);
+     if (strcmp(param, "dc")==0) sscanf(value, "%f", &P->dc);
+     if (strcmp(param, "median_ts")==0) sscanf(value, "%f", &P->median_ts);
+     if (strcmp(param, "truptot")==0) sscanf(value, "%f", &P->truptot);
+     if (strcmp(param, "tp_psv_coef")==0) sscanf(value, "%f", &P->tp_psv_coef);
+
    }
    fclose(fid);
 }

@@ -40,3 +40,5 @@ krg:
 clean:
 	-@rm $(OBJDIR)/*.o $(BINDIR)/krg 2>/dev/null || true
 
+install: 
+	cp $(BINDIR)/krg ~/executables

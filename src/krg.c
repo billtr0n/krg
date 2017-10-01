@@ -2,8 +2,7 @@
    simulation, both for a vertical non-planar fault.  This code was largely based on
    code provided by Daneil Roten <droten at sdsu dot mail dot com>. 
 
-    William Savran, wsavran@ucsd.edu
-
+    William Savran, wsavran@ucsd.edu 
    MPI-IO is used both for reading the source time function and writing
    the moment rate file.
 */
@@ -21,13 +20,16 @@
 #include "params.h"
 #include "stf.h"
 
+/* compute tr based on multiple linear regression */
+float compute_tr(float slip, float treff);
+
 /* computed scalar moment given moment rate tensor */
 float calculate_moment(int nst, float dt, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy);
 
 /* calculate moment rate tensor given subfault parameters */
 void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
                                     float slip, float psv, float trup, float strike, float dip, float rake, 
-                                    float vs, float rho, int rank);
+                                    float vs, float rho, int rank, float dc, float median_ts, float truptot, float tp_psv_coef);
 
 int main (int argc, char*argv[]) {
     /* modify these parameters */
@@ -126,13 +128,17 @@ int main (int argc, char*argv[]) {
         fprintf(stderr, "mean fault coord: %f\n", p.faultn_coord);
         fprintf(stderr, "momentrate file: %s\n\n", p.momentrate_file);
         fprintf(stderr, "iord: %d\n", p.iord);
-        fprintf(stderr, "npas: %d\n", p.iord);
-        fprintf(stderr, "trbndw: %d\n", p.iord);
-        fprintf(stderr, "a: %d\n", p.iord);
-        fprintf(stderr, "aproto: %d\n", p.iord);
-        fprintf(stderr, "ftype: %d\n", p.iord);
-        fprintf(stderr, "hp: %d\n", p.iord);
-        fprintf(stderr, "lp: %d\n", p.iord);
+        fprintf(stderr, "npas: %d\n", p.npas);
+        fprintf(stderr, "trbndw: %f\n", p.trbndw);
+        fprintf(stderr, "a: %f\n", p.a);
+        fprintf(stderr, "aproto: %s\n", p.aproto);
+        fprintf(stderr, "ftype: %s\n", p.ftype);
+        fprintf(stderr, "hp: %f\n", p.hp);
+        fprintf(stderr, "lp: %f\n", p.lp);
+        fprintf(stderr, "dc: %f\n", p.dc);
+        fprintf(stderr, "median_ts: %f\n", p.median_ts);
+        fprintf(stderr, "truptot: %f\n", p.truptot);
+        fprintf(stderr, "tp_psv_coef: %f\n", p.tp_psv_coef);
     }
     
     /* loop over subfault block nchunks */
@@ -168,11 +174,13 @@ int main (int argc, char*argv[]) {
         /* looping over each subfault */
         for (k=0; k<csize; k++) {
             calculate_moment_rate(time_buf, nt, p.source_dx, xx_buf[k], yy_buf[k], zz_buf[k], xz_buf[k], yz_buf[k], xy_buf[k],
-                                    slip_buf[k], psv_buf[k], trup_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], vs_buf[k], rho_buf[k], rank);
+                                    slip_buf[k], psv_buf[k], trup_buf[k], strike_buf[k], dip_buf[k], rake_buf[k], vs_buf[k], rho_buf[k], 
+                                        rank, p.dc, p.median_ts, p.truptot, p.tp_psv_coef);
 
             
             /* filter if desired */
             if (p.filter) {
+                if (rank==0) fprintf(stderr, "filtering source with parameters listed above.\n");
                 xapiir_(xx_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
                 xapiir_(yy_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
                 xapiir_(zz_buf[k], &nt, p.aproto, &p.trbndw, &p.a, &p.iord, p.ftype, &p.hp, &p.lp, &p.dt, &p.npas);
@@ -253,7 +261,7 @@ int main (int argc, char*argv[]) {
 /* FUNCTIONS */
 void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, float *zz, float *xz, float *yz, float *xy, 
                                     float slip, float psv, float trup, float strike, float dip, float rake, 
-                                    float vs, float rho, int rank) {
+                                        float vs, float rho, int rank, float dc, float median_ts, float truptot, float tp_psv_coef) {
     float *sliprate; 
     float momentrate;
     float ts, tr;
@@ -261,31 +269,53 @@ void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, 
     int i;
     float srad, drad, rrad;
     // float ratio = 0.04235592747; // hard-coded assuming fs_max = 15.0 Hz
-    float dc = 0.11;
+    //float dc = 0.11;
+    //float median_ts = 1.0/15.0;
+    float ratio;
+    //float truptot=18.5;
+    float temp_psv, treff;
+
+    tr=0.0;
+    ts=0.0;
+    // compute dt
     dt = time[1] - time[0];
-
-    // cap ts for low peak slip value based on analysis from dynamic sims
-    ts = 0.75 * dc / psv;
-    if (ts > 0.5) {
-        ts = 0.5;
+    // compute ratio of slip to vpeak
+    ratio=slip/psv;
+    // modify vpeak so ratio is bounded at 2.0
+    temp_psv=psv;
+    if (ratio > 2) {
+        temp_psv = slip / 2;
     }
-
-    // compute rise time
-    tr = powf(slip, 2) / powf(psv, 2) / ts;
-        
-    // prevent bad values that are undefined for the tinti function
-    if (tr <= ts) {
-        // arbitrary increment
-        tr = ts + 50*dt;
-    } 
-    else if (tr >= 16.0) {
-        tr = 16.0; // temporary value calculated as vrup=2410 m/s fault width = 40km
+    // limit the vpeak to 0.1 m/s
+    if (temp_psv < 0.1) {
+        temp_psv = 0.1;
     }
-    
+    // compute ts using altered psv
+    ts = tp_psv_coef * dc / temp_psv;
+    // impose minimum value of 0.1 m/s to cap the ts at 0.825 seconds.
+    if (ts >= 0.824999) {
+        ts = median_ts;
+    }
+    treff = truptot-trup;
+    // define 0 initialized vector to hold the slip-rate
+    sliprate = zeros_f(nt);
+    // for subfaults with abnormally large rupture times, assume they did not rupture
+    if (treff >= 0.0) {
+        tr=compute_tr(slip, treff);
+        if (tr <= ts) {
+            // arbitrary increment
+            tr = ts + 100*dt;
+        }
+        // this should not happen, but its here just in case.
+        else if (tr >= truptot) {
+            tr = truptot; 
+        }
+        // compute tinti function using these parameters
+        sliprate = tinti(time, nt, tr, ts, trup, slip);
+    }
     // output debugging information
     fprintf(stderr, "(%d) psv: %f slip: %f trup: %f strike: %f dip: %f rake: %f ts: %f tr: %f nt: %i\n", rank, psv, slip, trup, strike, dip, rake, ts, tr, nt);
 
-    sliprate = zeros_f(nt);
 
     /* DEPRECATED : Exponential Source-time function 
     tpeak = slip / (exp(1)*psv);
@@ -305,11 +335,6 @@ void calculate_moment_rate(float *time, int nt, float dx, float *xx, float *yy, 
         // muAD = moment
     */
         
-    // compute slip-rate function
-    if (trup <=16) {
-        sliprate = tinti(time, nt, tr, ts, trup, slip);
-    }
-
     for (i=0; i<nt; i++) {
         // convert to moment-rate using Mo = uAD
         momentrate = sliprate[i] * vs*vs*rho * dx*dx;
@@ -348,4 +373,10 @@ float calculate_moment(int nst, float dt, float *xx, float *yy, float *zz, float
     mij_squared = mxx*mxx + myy*myy + mzz*mzz + 2*mxz*mxz + 2*myz*myz + 2*mxy*mxy;
     m0 = prefactor * sqrt(mij_squared);
     return m0;
+}
+
+float compute_tr(float slip, float treff) {
+    float tr;
+    tr=2.596*slip+0.108*treff;
+    return tr;
 }
